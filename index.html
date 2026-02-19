@@ -2,74 +2,154 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <!-- ===== TITLE PLACEHOLDER ===== -->
   <title>Above Ground Biomass Estimate</title>
+
+  <!-- Prevent caching -->
+  <meta http-equiv="Cache-Control" content="no-store" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
   <style>
-    /* ===== GLOBAL STYLES ===== */
     html, body { height: 100%; margin: 0; font-family: Arial, sans-serif; }
     #map { height: 100%; width: 100%; }
+
     .map-overlay {
       position: absolute;
       top: 10px;
       left: 10px;
-      background: rgba(255,255,255,0.9);
-      padding: 10px 15px;
-      border-radius: 4px;
-      max-width: 280px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      background: rgba(255,255,255,0.95);
+      padding: 12px 16px;
+      border-radius: 6px;
+      max-width: 300px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.25);
     }
+
     .map-overlay h1 {
-      margin: 0 0 5px;
+      margin: 0 0 6px;
       font-size: 18px;
-      color: #333;
+      color: #1b4332;
     }
-    .map-overlay p { margin: 0; font-size: 13px; color: #555; }
+
+    .map-overlay p {
+      margin: 0;
+      font-size: 13px;
+      color: #444;
+    }
+
+    .legend {
+      background: white;
+      padding: 8px 12px;
+      font-size: 12px;
+      line-height: 18px;
+      border-radius: 4px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+
+    .legend i {
+      width: 18px;
+      height: 18px;
+      float: left;
+      margin-right: 8px;
+      opacity: 0.8;
+    }
   </style>
 </head>
+
 <body>
 
 <div id="map"></div>
 
-<!-- ===== MAP OVERLAY (TITLE/INFO) ===== -->
 <div class="map-overlay">
-  <h1><!-- Overlay Title Placeholder -->Water Quality Data</h1>
-  <p><!-- Overlay subtitle / description placeholder -->
-    A quick visual of the latest water quality measurements.
-  </p>
+  <h1>Above Ground Biomass</h1>
+  <p>Polygons styled by AGB values (kg or t depending on your field).</p>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
-  // --- Map setup --------------------------------------------------------
-  const map = L.map('map').setView([37.75, -122.45], 12);
+
+  // ------------------------------------------------------------------
+  // Map setup
+  // ------------------------------------------------------------------
+  const map = L.map('map').setView([54, -2], 6);  // UK default view
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '© OpenStreetMap contributors'
   }).addTo(map);
 
-  // --- GeoJSON source ----------------------------------------------------
-  // Replace this path with the location of your .geojson file
-  const geojsonUrl = 'AGBmap2Simpl.geojson';  // e.g., 'data/water_quality.geojson'
+  // ------------------------------------------------------------------
+  // GeoJSON source (cache-busted)
+  // ------------------------------------------------------------------
+  const geojsonUrl = 'AGBmap2Simpl.geojson?v=' + new Date().getTime();
 
-  // --- Load & display the GeoJSON --------------------------------------
+  // ------------------------------------------------------------------
+  // Color scale (green gradient)
+  // ------------------------------------------------------------------
+  function getColor(d, min, max) {
+    const ratio = (d - min) / (max - min);
+    const r = 240 - ratio * 200;
+    const g = 255 - ratio * 100;
+    const b = 240 - ratio * 240;
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
   fetch(geojsonUrl)
     .then(r => r.json())
     .then(data => {
+
+      // Get min/max AGB
+      const values = data.features
+        .map(f => f.properties.AGB)
+        .filter(v => v !== null && !isNaN(v));
+
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+
       const layer = L.geoJSON(data, {
+
+        style: feature => ({
+          fillColor: getColor(feature.properties.AGB, min, max),
+          fillOpacity: 0.85,
+          stroke: false   // removes borders completely
+        }),
+
         onEachFeature: (feature, layer) => {
-          const attrs = Object.entries(feature.properties)
-            .map(([k,v]) => `<strong>${k}:</strong> ${v}`)
-            .join('<br/>');
-          layer.bindPopup(attrs);
+          layer.bindPopup(
+            `<strong>AGB:</strong> ${feature.properties.AGB}`
+          );
         }
+
       }).addTo(map);
+
       map.fitBounds(layer.getBounds());
+
+      // --------------------------------------------------------------
+      // Legend
+      // --------------------------------------------------------------
+      const legend = L.control({position: 'bottomright'});
+
+      legend.onAdd = function () {
+        const div = L.DomUtil.create('div', 'legend');
+        const grades = 5;
+        const step = (max - min) / grades;
+
+        for (let i = 0; i < grades; i++) {
+          const from = min + (step * i);
+          const to = from + step;
+          div.innerHTML +=
+            '<i style="background:' + getColor(from, min, max) + '"></i> ' +
+            from.toFixed(1) + ' – ' + to.toFixed(1) + '<br>';
+        }
+        return div;
+      };
+
+      legend.addTo(map);
+
     })
     .catch(err => console.error('Error loading GeoJSON', err));
+
 </script>
 </body>
 </html>
-
-
-
