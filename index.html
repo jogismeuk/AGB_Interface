@@ -76,109 +76,77 @@
   const map = L.map('map').setView([54, -2], 6);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
+    maxZoom: 18,
     attribution: '© OpenStreetMap contributors'
   }).addTo(map);
 
 
   // ------------------------------------------------------------
-  // CHM Overlay (must be exported as GeoTIFF or image tile)
+  // Fixed 100 kg Class Styling
   // ------------------------------------------------------------
-
-  // OPTION 1: If you exported CHM as a PNG with known bounds
-  const chmBounds = [[53.5, -3.0], [54.5, -1.0]];  // <-- REPLACE with real bounds
-
-  const chmLayer = L.imageOverlay(
-    'CHM.png',   // <-- replace with your raster filename
-    chmBounds,
-    { opacity: 0.5 }
-  );
-
-  chmLayer.addTo(map);
-
-
-  // ------------------------------------------------------------
-  // GeoJSON source (cache safe)
-  // ------------------------------------------------------------
-  const geojsonUrl = 'AGBmap2Simpl.geojson?v=' + new Date().getTime();
-
-
-  // ------------------------------------------------------------
-  // Dark Green 10-Level Classification
-  // ------------------------------------------------------------
-  function getColor(value, breaks) {
-    const colors = [
-      '#edf8e9',
-      '#c7e9c0',
-      '#a1d99b',
-      '#74c476',
-      '#41ab5d',
-      '#238b45',
-      '#006d2c',
-      '#005a24',
-      '#00441b',
-      '#002d13'
-    ];
-
-    for (let i = 0; i < breaks.length - 1; i++) {
-      if (value >= breaks[i] && value <= breaks[i+1]) {
-        return colors[i];
-      }
-    }
-    return colors[colors.length - 1];
+  function getColor(d) {
+    return d >= 1000 ? '#002d13' :
+           d >= 900  ? '#00441b' :
+           d >= 800  ? '#005a24' :
+           d >= 700  ? '#006d2c' :
+           d >= 600  ? '#238b45' :
+           d >= 500  ? '#41ab5d' :
+           d >= 400  ? '#74c476' :
+           d >= 300  ? '#a1d99b' :
+           d >= 200  ? '#c7e9c0' :
+           d >= 100  ? '#e5f5e0' :
+                       '#f7fcf5';
   }
 
+  function style(feature) {
+    return {
+      fillColor: getColor(feature.properties.AGB),
+      fillOpacity: 0.9,
+      color: 'black',
+      weight: 0.6
+    };
+  }
+
+
+  // ------------------------------------------------------------
+  // Load GeoJSON
+  // ------------------------------------------------------------
+  const geojsonUrl = 'AGBmap2Simpl.geojson?v=' + new Date().getTime();
 
   fetch(geojsonUrl)
     .then(r => r.json())
     .then(data => {
 
-      const values = data.features
-        .map(f => f.properties.AGB)
-        .filter(v => v !== null && !isNaN(v));
-
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-
-      // 10 equal interval breaks
-      const step = (max - min) / 10;
-      const breaks = [];
-      for (let i = 0; i <= 10; i++) {
-        breaks.push(min + (step * i));
-      }
-
       const geoLayer = L.geoJSON(data, {
-
-        style: feature => ({
-          fillColor: getColor(feature.properties.AGB, breaks),
-          fillOpacity: 0.9,
-          color: 'black',
-          weight: 0.5
-        }),
-
+        style: style,
         onEachFeature: (feature, layer) => {
           layer.bindPopup(
-            `<strong>AGB:</strong> ${feature.properties.AGB}`
+            `<strong>AGB:</strong> ${feature.properties.AGB} kg`
           );
         }
-
       }).addTo(map);
 
       map.fitBounds(geoLayer.getBounds());
 
+
       // --------------------------------------------------------
-      // Legend (10 classes)
+      // Legend
       // --------------------------------------------------------
-      const legend = L.control({position: 'bottomright'});
+      const legend = L.control({ position: 'bottomright' });
 
       legend.onAdd = function () {
+
         const div = L.DomUtil.create('div', 'legend');
 
-        for (let i = 0; i < 10; i++) {
+        const grades = [0,100,200,300,400,500,600,700,800,900,1000];
+
+        for (let i = 0; i < grades.length; i++) {
+
           div.innerHTML +=
-            '<i style="background:' + getColor(breaks[i], breaks) + '; width:18px; height:18px; display:inline-block; margin-right:6px;"></i> ' +
-            breaks[i].toFixed(1) + ' – ' + breaks[i+1].toFixed(1) +
-            '<br>';
+            '<i style="background:' + getColor(grades[i] + 1) +
+            '; width:18px; height:18px; display:inline-block; margin-right:6px;"></i> ' +
+            grades[i] +
+            (grades[i + 1] ? '&ndash;' + grades[i + 1] + ' kg<br>' : '+ kg');
         }
 
         return div;
@@ -193,4 +161,5 @@
 
 </body>
 </html>
+
 
